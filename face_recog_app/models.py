@@ -26,7 +26,7 @@ class Attendence(models.Model):
     status=models.BooleanField(default=False,help_text='if it is true , that means user is here')
     
     def __str__(self):
-        return f'{self.user_id.username}   |   {self.date}   |   {self.satus}'
+        return f'{self.user_id.username}   |   {self.date}   |   {self.status}'
     
     
     
