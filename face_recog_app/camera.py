@@ -97,22 +97,22 @@
 #             frame = buffer.tobytes()
 #             yield (b'--frame\r\n'
 #                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-def auto_attendence():
-    all_users=Users.objects.values('id')
-    print(all_users)
-    ids_list = [item['id'] for item in all_users]
-    print(ids_list)
-    for user_id in ids_list:
-        user=Users.objects.get(pk=user_id)
-        att_user=Attendance.objects.filter(user_id=user_id).last()
-        if att_user.date!=date.today():
-            try:
-                Attendance.objects.create(user_id=user_id,date=date.today(),status=False)
-                print('Attendance added for', user.username)
-            except Exception as e:
-                print('Error adding attendance:', str(e))
-        else:
-            print('User', user.username, ' already axist !')
+# def auto_attendence():
+#     all_users=Users.objects.values('id')
+#     print(all_users)
+#     ids_list = [item['id'] for item in all_users]
+#     print(ids_list)
+#     for user_id in ids_list:
+#         user=Users.objects.get(pk=user_id)
+#         att_user=Attendance.objects.filter(user_id=user_id).last()
+#         if att_user.date!=date.today():
+#             try:
+#                 Attendance.objects.create(user_id=user_id,date=date.today(),status=False)
+#                 print('Attendance added for', user.username)
+#             except Exception as e:
+#                 print('Error adding attendance:', str(e))
+#         else:
+#             print('User', user.username, ' already axist !')
 
 
 
