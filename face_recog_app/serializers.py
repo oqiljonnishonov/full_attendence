@@ -12,7 +12,7 @@ class StudentsSerializers(serializers.ModelSerializer):
         model=Students
         fields=('username','group_id','image')
     
-class AttendenceSerializer(serializers.ModelSerializer):
+class AttendenceSerializers(serializers.ModelSerializer):
     class Meta:
         model=Attendence
         fields=('user_id','date','status')

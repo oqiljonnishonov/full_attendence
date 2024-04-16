@@ -252,23 +252,23 @@ def auto_attendence():
     all_users=Students.objects.values('id')
     print(all_users)
     ids_list = [item['id'] for item in all_users]
-    print(ids_list)
+    print(f'id list: {ids_list}')
     for user_id in ids_list:
         user=Students.objects.get(pk=user_id)
-        att_user=Attendence.objects.filter(user_id=user_id).last()
+        att_user=Attendence.objects.filter(user_id=user).last()
         if att_user is None :
             try:
-                Attendence.objects.create(user_id=user_id,date=date.today(),status=False)
+                Attendence.objects.create(user_id=user,date=date.today(),status=False)
                 print('Attendance added for', user.username)
             except Exception as e:
-                print('Error adding attendance:', str(e))
+                print('func 1: Error adding attendance:', str(e))
         
         elif att_user.date!=date.today() and att_user is not None:
             try:
-                Attendence.objects.create(user_id=user_id,date=date.today(),status=False)
+                Attendence.objects.create(user_id=user,date=date.today(),status=False)
                 print('Attendance added for', user.username)
             except Exception as e:
-                print('Error adding attendance:', str(e))
+                print('func 2: Error adding attendance:', str(e))
         else:
             print('User', user.username, ' already axist !')
 
@@ -288,17 +288,33 @@ class VideoCamera:
         # att_user=Attendance.objects.filter(user_id=user).last()
         ids=user.id if user else print("user yo'q")
         users=Attendence.objects.filter(user_id=ids).last()
-        if ids is not None and users.status==False:
-            try:
-                users.status=True
-                users.save()
-                print('Attendance added for', name)
-            except Exception as e:
-                print('Error adding attendance:', str(e))
-        else:
-            print('User', name, 'is already in the database')
+        if users:
+            if ids is not None and users.status==False:
+                try:
+                    users.status=True
+                    users.save()
+                    print('Attendance added for', name)
+                except Exception as e:
+                    print('class ichi : Error adding attendance:', str(e))
+            else:
+                print('User', name, 'is already in the database')
+    
             
-            
+    def check_liveness(self, frame, face):
+        # Extract face region
+        x, y, w, h = face.left(), face.top(), face.width(), face.height()
+        face_region = frame[y:y+h, x:x+w]
+
+        # Convert face region to grayscale for motion analysis
+        face_gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY)
+
+        # Perform motion analysis (simple motion thresholding)
+        _, motion = cv2.threshold(face_gray, 30, 255, cv2.THRESH_BINARY)
+        motion_count = cv2.countNonZero(motion)
+
+        # If there's significant motion in the face region, consider it as live
+        return motion_count > 100  # Adjust threshold as needed
+        
             
     def generate_frames_and_check_faces(self):
         while True:
@@ -314,38 +330,43 @@ class VideoCamera:
                 center = (x + w // 2, y + h // 2)
                 radius = int((w + h) // 3)
                 cv2.circle(frame, center, radius, (0, 255, 0), 2)
+                
+                 # Check liveness
+                if self.check_liveness(frame, face):
+                    # If liveness check passes, perform face recognition
 
-                face_locations = [(y, x + w, y + h, x)]
-                face_encodings = face_recognition.face_encodings(frame, face_locations)
+                    face_locations = [(y, x + w, y + h, x)]
+                    face_encodings = face_recognition.face_encodings(frame, face_locations)
 
-                if len(face_encodings) > 0:
-                    face_encoding = face_encodings[0]
-                    # media\images\Oqiljon_Islomov.JPG
-                    students=Students.objects.all()
-                    for item in students:  #(item["username"], item["image"]) 
-                        print('*******************************************')
-                        print(item.image)
-                        print(item.username)
-                        # print(item["image"])
-                        # print(item["username"])
-                        print(f'media/{item.image}')
-                        print('*******************************************')
-                        self.reference_image_path=f'media/{item.image}'
-                        self.reference_image = cv2.imread(self.reference_image_path)
-                        # self.reference_image = cv2.imread(item.image)
-                        self.reference_encoding = face_recognition.face_encodings(self.reference_image)[0]
-                        usernames=item.username
+                    if len(face_encodings) > 0:
+                        face_encoding = face_encodings[0]
+                        # media\images\Oqiljon_Islomov.JPG
+                        students=Students.objects.all()
+                        for item in students:  #(item["username"], item["image"]) 
+                            print('*******************************************')
+                            print(item.image)
+                            print(item.username)
+                            # print(item["image"])
+                            # print(item["username"])
+                            print(f'media/{item.image}')
+                            print('*******************************************')
+                            self.reference_image_path=f'media/{item.image}'
+                            self.reference_image = cv2.imread(self.reference_image_path)
+                            # self.reference_image = cv2.imread(item.image)
+                            self.reference_encoding = face_recognition.face_encodings(self.reference_image)[0]
+                            usernames=item.username
+                            
+                            results_user = face_recognition.compare_faces([self.reference_encoding], face_encoding)
+
+                            if any(results_user):
+                                self.name = usernames
+                                self.attendance(usernames)
+                                
+                            else:
+                                self.name = "Topilmadi..."
                         
-                        results_mine = face_recognition.compare_faces([self.reference_encoding], face_encoding)
-
-                        if any(results_mine):
-                            self.name = usernames
-                            self.attendance(usernames)
-                        else:
-                            self.name = "Topilmadi..."
-                    
-                        text_position = (x + 10, y + 280)
-                        cv2.putText(frame, self.name, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                            text_position = (x + 10, y + 280)
+                            cv2.putText(frame, self.name, text_position, cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
 
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()

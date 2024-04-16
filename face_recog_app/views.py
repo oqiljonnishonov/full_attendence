@@ -10,8 +10,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 import requests
-from .models import Students
-from .serializers import StudentsSerializers
+from .models import Students , Attendence
+from .serializers import StudentsSerializers , AttendenceSerializers 
 
 # a=Students.subjects.all()
 # print(a)
@@ -23,6 +23,18 @@ class StudentsAPIView(APIView):
         students=Students.objects.all()
         print(students)
         serializer=StudentsSerializers(students,many=True)
+        return Response(data=serializer.data)
+
+class AttendenceAPIView(APIView):
+    serializer_class=AttendenceSerializers
+    permission_classes=(AllowAny,)
+    def get(self,request):
+        students=Students.objects.all()
+        print(students)
+        attends=Attendence.objects.filter(user_id__in=students)
+        print(students)
+        print(attends)
+        serializer=AttendenceSerializers(attends,many=True)
         return Response(data=serializer.data)
 
 
