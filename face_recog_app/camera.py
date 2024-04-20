@@ -240,12 +240,13 @@
 
 
 
-
+import os
 import cv2
 import dlib
 import face_recognition
 from datetime import date
 from .models import Students , Attendence , Groups
+# pwd = os.path.dirname(__file__)
 
 
 # def auto_attendence():
@@ -407,8 +408,8 @@ from .models import Students , Attendence , Groups
 #             yield (b'--frame\r\n'
 #                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n') 
             
-            
-            
+
+
             
 def auto_attendance():
     all_users = Students.objects.values('id')
@@ -433,15 +434,55 @@ def auto_attendance():
 
 class VideoCamera:
     def __init__(self):
-        self.detector = dlib.get_frontal_face_detector()
-        self.cap = cv2.VideoCapture(0)
-        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        self.detector = dlib.get_frontal_face_detector() # type: ignore
+        self.cap = cv2.VideoCapture(1)
+        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml') # type: ignore
         self.generate_frames_and_check_faces()
+        # face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        # eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        self.cwd = os.getcwd()
+        
+        self.dat_path="face_recog_app/shape_predictor_68_face_landmarks.dat"
+        
+        self.full_dat_path = os.path.join(cwd, dat_path)
+        self.predictor = dlib.shape_predictor(full_dat_path)
+        # self.pwd = os.path.dirname(__file__)
+        # self.dat_path2="C:\Users\oqilj\OneDrive\Desktop\Intalim Face detect\face recog 2\face_recog\face_recog_app\shape_predictor_68_face_landmarks.dat"
+        # self.predictor = dlib.shape_predictor(pwd+dat_path)
+        self.EYE_AR_THRESH = 0.2
+        self.EYE_AR_CONSEC_FRAMES = 3
+
+        # Initialize variables
+        self.COUNTER = 0
+        self.TOTAL = 0
+        
+    
+    # Eye aspect ratio (EAR) calculation function
+    def eye_aspect_ratio(self,eye):
+        # Compute the euclidean distances between the two sets of vertical eye landmarks
+        A = np.linalg.norm(eye[1] - eye[5])
+        B = np.linalg.norm(eye[2] - eye[4])
+        # Compute the euclidean distance between the horizontal eye landmarks
+        C = np.linalg.norm(eye[0] - eye[3])
+        # Compute the eye aspect ratio
+        ear = (A + B) / (2.0 * C)
+        return ear
+
+    
+        
+    # def check_liveness(self,face):
+    #     # Calculate the variance of pixel intensities within the face region
+    #     variance = cv2.Laplacian(face, cv2.CV_64F).var()
+    #     print("********************Liveness varian****************************")
+    #     print(variance) 
+    #     print("*******************Liveness varian*****************************")   
+    #     return variance > 100
+        
 
     def attendance(self, name):
         auto_attendance()
         user = Students.objects.filter(username=name).first()
-        ids = user.id if user else print("User does not exist")
+        ids = user.id if user else print("User does not exist") # type: ignore
         users = Attendence.objects.filter(user_id=ids).last()
         if users:
             if ids is not None and users.status == False:
@@ -469,8 +510,53 @@ class VideoCamera:
                 radius = int((w + h) // 3)
                 cv2.circle(frame, center, radius, (0, 255, 0), 2)
                 
+                 # Detect facial landmarks
+                shape = predictor(gray, face)
+                shape = shape_to_np(shape)
+
+                # Extract the left and right eye coordinates
+                left_eye = shape[l_start:l_end]
+                right_eye = shape[r_start:r_end]
+
+                # Calculate eye aspect ratio for each eye
+                left_ear = eye_aspect_ratio(left_eye)
+                right_ear = eye_aspect_ratio(right_eye)
+
+                # Average the eye aspect ratio for both eyes
+                ear = (left_ear + right_ear) / 2.0
+
+                # Draw the eyes region
+                left_eye_hull = cv2.convexHull(left_eye)
+                right_eye_hull = cv2.convexHull(right_eye)
+                cv2.drawContours(frame, [left_eye_hull], -1, (0, 255, 0), 1)
+                cv2.drawContours(frame, [right_eye_hull], -1, (0, 255, 0), 1)
+
+                # Check if the eye aspect ratio is below the threshold
+                if ear < EYE_AR_THRESH:
+                    COUNTER += 1
+                else:
+                    if COUNTER >= EYE_AR_CONSEC_FRAMES:
+                        TOTAL += 1
+                    COUNTER = 0
+                
+                # Display the eye aspect ratio on the frame
+                cv2.putText(frame, f"EAR: {ear:.2f}", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                
+                
+                face_region=gray[y:y + h, x:x + w]
                 # Eye detection for liveness check
-                eyes = self.eye_cascade.detectMultiScale(gray[y:y + h, x:x + w], scaleFactor=1.1, minNeighbors=5)
+                eyes = self.eye_cascade.detectMultiScale(face_region, scaleFactor=1.1, minNeighbors=5)
+                
+                # Check for liveness
+                # is_real = self.check_liveness(face_region)
+                # print("*******************Is_real*****************************")
+                # print(is_real)
+                # print(eyes)
+                # print(len(eyes))
+                # print("*******************Is_real*****************************")
+                # color = (0, 255, 0) if is_real else (0, 0, 255)
+                # cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
                 if len(eyes) >= 2:  # Assuming at least 2 eyes detected for liveness
                     face_locations = [(y, x + w, y + h, x)]
                     face_encodings = face_recognition.face_encodings(frame, face_locations)
@@ -497,6 +583,13 @@ class VideoCamera:
                             text_position = (x + 10, y + 280)
                             cv2.putText(frame, self.name, text_position, cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
 
+            # Display the total number of blinks
+            cv2.putText(frame, f"Blinks: {TOTAL}", (10, 60),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+            # Display the frame
+            cv2.imshow("Frame", frame)
+            
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
