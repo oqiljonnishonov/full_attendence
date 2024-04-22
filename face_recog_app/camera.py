@@ -245,6 +245,8 @@ import cv2
 import dlib
 import face_recognition
 from datetime import date
+
+import numpy as np
 from .models import Students , Attendence , Groups
 # pwd = os.path.dirname(__file__)
 
@@ -408,6 +410,18 @@ from .models import Students , Attendence , Groups
 #             yield (b'--frame\r\n'
 #                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n') 
             
+# import numpy as np
+
+def shape_to_np(shape, dtype="int"):
+    # Initialize the list of (x, y)-coordinates
+    coords = np.zeros((shape.num_parts, 2), dtype=dtype)
+
+    # Loop over the facial landmarks and convert them to a 2-tuple of (x, y)-coordinates
+    for i in range(0, shape.num_parts):
+        coords[i] = (shape.part(i).x, shape.part(i).y)
+
+    # Return the list of (x, y)-coordinates
+    return coords
 
 
             
@@ -420,17 +434,17 @@ def auto_attendance():
         if att_user is None:
             try:
                 Attendence.objects.create(user_id=user, date=date.today(), status=False)
-                print('Attendance added for', user.username)
+                print('Auto attendance added for', user.username)
             except Exception as e:
                 print('func 1: Error adding attendance:', str(e))
         elif att_user.date != date.today() and att_user is not None:
             try:
                 Attendence.objects.create(user_id=user, date=date.today(), status=False)
-                print('Attendance added for', user.username)
+                print('Auto attendance added for', user.username)
             except Exception as e:
                 print('func 2: Error adding attendance:', str(e))
         else:
-            print('User', user.username, ' already exists!')
+            print('User', user.username, ' already exists(in auto)!')
 
 class VideoCamera:
     def __init__(self):
@@ -440,17 +454,17 @@ class VideoCamera:
         self.generate_frames_and_check_faces()
         # face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         # eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-        self.cwd = os.getcwd()
+        # self.cwd = os.getcwd()
         
-        self.dat_path="face_recog_app/shape_predictor_68_face_landmarks.dat"
+        dat_path="face_recog_app/shape_predictor_68_face_landmarks.dat"
         
-        self.full_dat_path = os.path.join(cwd, dat_path)
-        self.predictor = dlib.shape_predictor(full_dat_path)
+        # self.full_dat_path = os.path.join(cwd, dat_path) # type: ignore
+        self.predictor = dlib.shape_predictor(dat_path) # type: ignore
         # self.pwd = os.path.dirname(__file__)
         # self.dat_path2="C:\Users\oqilj\OneDrive\Desktop\Intalim Face detect\face recog 2\face_recog\face_recog_app\shape_predictor_68_face_landmarks.dat"
         # self.predictor = dlib.shape_predictor(pwd+dat_path)
         self.EYE_AR_THRESH = 0.2
-        self.EYE_AR_CONSEC_FRAMES = 3
+        self.EYE_AR_CONSEC_FRAMES =1
 
         # Initialize variables
         self.COUNTER = 0
@@ -496,6 +510,16 @@ class VideoCamera:
                 print('User', name, 'is already in the database')
 
     def generate_frames_and_check_faces(self):
+        # Initialize variables
+        # global COUNTER
+        # COUNTER = 0
+        # TOTAL = 0
+        
+        
+        l_start = 36
+        l_end = 42
+        r_start = 42
+        r_end = 48
         while True:
             ret, frame = self.cap.read()
             if not ret:
@@ -511,16 +535,16 @@ class VideoCamera:
                 cv2.circle(frame, center, radius, (0, 255, 0), 2)
                 
                  # Detect facial landmarks
-                shape = predictor(gray, face)
-                shape = shape_to_np(shape)
+                shape = self.predictor(gray, face) # type: ignore
+                shape = shape_to_np(shape)  # type: ignore
 
                 # Extract the left and right eye coordinates
-                left_eye = shape[l_start:l_end]
-                right_eye = shape[r_start:r_end]
+                left_eye = shape[l_start:l_end] # type: ignore
+                right_eye = shape[r_start:r_end] # type: ignore
 
                 # Calculate eye aspect ratio for each eye
-                left_ear = eye_aspect_ratio(left_eye)
-                right_ear = eye_aspect_ratio(right_eye)
+                left_ear = self.eye_aspect_ratio(left_eye) # type: ignore
+                right_ear = self.eye_aspect_ratio(right_eye) # type: ignore
 
                 # Average the eye aspect ratio for both eyes
                 ear = (left_ear + right_ear) / 2.0
@@ -530,15 +554,19 @@ class VideoCamera:
                 right_eye_hull = cv2.convexHull(right_eye)
                 cv2.drawContours(frame, [left_eye_hull], -1, (0, 255, 0), 1)
                 cv2.drawContours(frame, [right_eye_hull], -1, (0, 255, 0), 1)
-
+                print(ear)
                 # Check if the eye aspect ratio is below the threshold
-                if ear < EYE_AR_THRESH:
-                    COUNTER += 1
+                if ear <= self.EYE_AR_THRESH: # type: ignore
+                    self.COUNTER += 1
+                    print("****************************Total func****************")
+                    print(self.COUNTER)
+                    print(self.EYE_AR_CONSEC_FRAMES)
+                    print("****************************Total func****************")
                 else:
-                    if COUNTER >= EYE_AR_CONSEC_FRAMES:
-                        TOTAL += 1
-                    COUNTER = 0
-                
+                    if self.COUNTER >= self.EYE_AR_CONSEC_FRAMES: # type: ignore
+                        self.TOTAL += 1
+                    self.COUNTER = 0
+                print(self.TOTAL)
                 # Display the eye aspect ratio on the frame
                 cv2.putText(frame, f"EAR: {ear:.2f}", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
@@ -574,7 +602,7 @@ class VideoCamera:
                             usernames = item.username
 
                             results_user = face_recognition.compare_faces([self.reference_encoding], face_encoding)
-                            if results_user[0] == True:
+                            if results_user[0] == True and self.TOTAL>=1:
                                 self.name = usernames
                                 self.attendance(usernames)
                             else:
@@ -584,11 +612,14 @@ class VideoCamera:
                             cv2.putText(frame, self.name, text_position, cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
 
             # Display the total number of blinks
-            cv2.putText(frame, f"Blinks: {TOTAL}", (10, 60),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                all=f"Blinks: {self.TOTAL}"
+                cv2.putText(frame, all , (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                self.TOTAL=0
+            
 
-            # Display the frame
-            cv2.imshow("Frame", frame)
+            # # Display the frame
+            # cv2.imshow("Frame", frame)
             
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
